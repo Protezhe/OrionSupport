@@ -68,13 +68,19 @@ def refresh_rows() -> None:
 # ─── Formatting ──────────────────────────────────────────────────────────────
 
 
-def format_result(scored: list) -> tuple[str, list[str]]:
-    """Format search results for Telegram. Returns (text, video_file_ids)."""
+def _parse_file_ids(raw: str) -> list[str]:
+    """Split comma-separated file_ids, skip empty."""
+    return [fid.strip() for fid in raw.split(",") if fid.strip()]
+
+
+def format_result(scored: list) -> tuple[str, list[str], list[str]]:
+    """Format search results. Returns (text, video_file_ids, photo_file_ids)."""
     good = [(score, row) for score, row in scored if score >= MIN_SCORE]
     if not good:
         return (
             "К сожалению, я не нашёл подходящего решения.\n"
             "Попробуйте переформулировать вопрос или обратитесь к дежурному инженеру.",
+            [],
             [],
         )
 
@@ -97,15 +103,10 @@ def format_result(scored: list) -> tuple[str, list[str]]:
     if solution2.strip():
         block.append(f"✅ Решение 2: {solution2}")
 
-    video_ids: list[str] = []
-    video = _get_field_case_insensitive(row, "Видео").strip()
-    if video:
-        for vid in video.split(","):
-            vid = vid.strip()
-            if vid:
-                video_ids.append(vid)
+    video_ids = _parse_file_ids(_get_field_case_insensitive(row, "Видео"))
+    photo_ids = _parse_file_ids(_get_field_case_insensitive(row, "Фото"))
 
-    return "\n".join(block), video_ids
+    return "\n".join(block), video_ids, photo_ids
 
 
 # ─── Handlers ────────────────────────────────────────────────────────────────
@@ -121,7 +122,7 @@ HELP_TEXT = (
     "/start — приветствие\n"
     "/help — эта справка\n"
     "/reload — обновить базу знаний\n"
-    "/upload — режим загрузки видео (5 мин)\n"
+    "/upload — режим загрузки видео/фото (5 мин)\n"
 )
 
 
@@ -142,22 +143,57 @@ async def cmd_upload(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     upload_mode[uid] = time.time() + UPLOAD_TIMEOUT
     await update.message.reply_text(
         "Режим загрузки включён на 5 минут.\n"
-        "Отправьте видео — я верну file_id для таблицы."
+        "Отправьте видео или фото — я верну file_id для таблицы."
     )
 
 
-async def handle_video(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def handle_upload(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     uid = update.effective_user.id
     expiry = upload_mode.get(uid, 0)
-    if time.time() > expiry:
+
+    # Upload mode активен — вернуть file_id
+    if time.time() <= expiry:
+        if update.message.video or update.message.document:
+            media = update.message.video or update.message.document
+            label = "Видео"
+        elif update.message.photo:
+            media = update.message.photo[-1]
+            label = "Фото"
+        else:
+            return
+        await update.message.reply_text(
+            f"{label} file_id для таблицы:\n\n<code>{media.file_id}</code>",
+            parse_mode="HTML",
+        )
         return
-    video = update.message.video or update.message.document
-    if not video:
+
+    # Upload mode выключен — обработать подпись как обычный запрос
+    caption = (update.message.caption or "").strip()
+    if caption:
+        await _search_and_reply(update, caption)
+
+
+async def _search_and_reply(update: Update, query: str) -> None:
+    if not rows:
+        await update.message.reply_text(
+            "База знаний пуста. Попробуйте /reload или обратитесь к инженеру."
+        )
         return
-    await update.message.reply_text(
-        f"file_id для таблицы:\n\n<code>{video.file_id}</code>",
-        parse_mode="HTML",
-    )
+    logger.info("Запрос от %s: %s", update.effective_user.first_name, query)
+    obj_code = detect_object_code(query, object_synonyms)
+    scored = find_best_with_object(query, rows, TOP_N, obj_code)
+    answer, video_ids, photo_ids = format_result(scored)
+    await update.message.reply_text(answer)
+    for pid in photo_ids:
+        try:
+            await update.message.reply_photo(pid)
+        except Exception:
+            logger.warning("Не удалось отправить фото: %s", pid)
+    for vid in video_ids:
+        try:
+            await update.message.reply_video(vid)
+        except Exception:
+            logger.warning("Не удалось отправить видео: %s", vid)
 
 
 async def cmd_reload(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -167,26 +203,8 @@ async def cmd_reload(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = (update.message.text or "").strip()
-    if not query:
-        return
-
-    logger.info("Запрос от %s: %s", update.effective_user.first_name, query)
-
-    if not rows:
-        await update.message.reply_text(
-            "База знаний пуста. Попробуйте /reload или обратитесь к инженеру."
-        )
-        return
-
-    obj_code = detect_object_code(query, object_synonyms)
-    scored = find_best_with_object(query, rows, TOP_N, obj_code)
-    answer, video_ids = format_result(scored)
-    await update.message.reply_text(answer)
-    for vid in video_ids:
-        try:
-            await update.message.reply_video(vid)
-        except Exception:
-            logger.warning("Не удалось отправить видео: %s", vid)
+    if query:
+        await _search_and_reply(update, query)
 
 
 # ─── Main ────────────────────────────────────────────────────────────────────
@@ -207,7 +225,7 @@ def main() -> None:
     app.add_handler(CommandHandler("help", cmd_help))
     app.add_handler(CommandHandler("reload", cmd_reload))
     app.add_handler(CommandHandler("upload", cmd_upload))
-    app.add_handler(MessageHandler(filters.VIDEO | filters.Document.VIDEO, handle_video))
+    app.add_handler(MessageHandler(filters.VIDEO | filters.Document.VIDEO | filters.PHOTO, handle_upload))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
     app.run_polling(drop_pending_updates=True)
