@@ -3,3 +3,7 @@ python search_solution.py
 
 source .venv/bin/activate
 python bot.py
+
+nohup bash start.sh > bot.log 2>&1 &
+
+pkill -f "python bot.py" && cd ~/OrionSupport && nohup bash start.sh > bot.log 2>&1 &

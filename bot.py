@@ -12,6 +12,7 @@ Telegram-бот техподдержки Орион.
 """
 
 import logging
+import time
 
 from telegram import Update
 from telegram.ext import (
@@ -43,7 +44,7 @@ logger = logging.getLogger(__name__)
 
 config = load_config()
 BOT_TOKEN = config.get("telegram_bot_token", "")
-TOP_N = 3
+TOP_N = 1
 MIN_SCORE = 0.35
 
 # ─── Global state ────────────────────────────────────────────────────────────
@@ -51,6 +52,9 @@ MIN_SCORE = 0.35
 sheet_url = get_sheet_url(config)
 object_synonyms = get_object_synonyms(config)
 rows: list[dict] = []
+upload_mode: dict[int, float] = {}  # user_id -> expiry timestamp
+
+UPLOAD_TIMEOUT = 300  # 5 минут
 
 
 def refresh_rows() -> None:
@@ -64,37 +68,44 @@ def refresh_rows() -> None:
 # ─── Formatting ──────────────────────────────────────────────────────────────
 
 
-def format_result(scored: list) -> str:
-    """Format search results for Telegram (Markdown-safe)."""
+def format_result(scored: list) -> tuple[str, list[str]]:
+    """Format search results for Telegram. Returns (text, video_file_ids)."""
     good = [(score, row) for score, row in scored if score >= MIN_SCORE]
     if not good:
         return (
             "К сожалению, я не нашёл подходящего решения.\n"
-            "Попробуйте переформулировать вопрос или обратитесь к дежурному инженеру."
+            "Попробуйте переформулировать вопрос или обратитесь к дежурному инженеру.",
+            [],
         )
 
-    parts: list[str] = []
-    for i, (score, row) in enumerate(good, 1):
-        problem = _get_field_case_insensitive(row, "Проблема")
-        solution = _get_field_case_insensitive(row, "Решение")
-        solution2 = _get_field_case_insensitive(row, "Решение_2")
-        obj = _get_field_case_insensitive(row, "Объект")
+    score, row = good[0]
+    problem = _get_field_case_insensitive(row, "Проблема")
+    solution = _get_field_case_insensitive(row, "Решение")
+    solution2 = _get_field_case_insensitive(row, "Решение_2")
+    obj = _get_field_case_insensitive(row, "Объект")
 
-        header = f"▸ Вариант {i}"
-        if obj:
-            header += f"  [{obj.upper()}]"
-        header += f"  (совпадение {score:.0%})"
+    header = "▸ Найдено"
+    if obj:
+        header += f"  [{obj.upper()}]"
+    header += f"  (совпадение {score:.0%})"
 
-        block = [header]
-        if problem:
-            block.append(f"Проблема: {problem}")
-        if solution:
-            block.append(f"✅ Решение: {solution}")
-        if solution2.strip():
-            block.append(f"✅ Решение 2: {solution2}")
-        parts.append("\n".join(block))
+    block = [header]
+    if problem:
+        block.append(f"Проблема: {problem}")
+    if solution:
+        block.append(f"✅ Решение: {solution}")
+    if solution2.strip():
+        block.append(f"✅ Решение 2: {solution2}")
 
-    return "\n\n".join(parts)
+    video_ids: list[str] = []
+    video = _get_field_case_insensitive(row, "Видео").strip()
+    if video:
+        for vid in video.split(","):
+            vid = vid.strip()
+            if vid:
+                video_ids.append(vid)
+
+    return "\n".join(block), video_ids
 
 
 # ─── Handlers ────────────────────────────────────────────────────────────────
@@ -110,6 +121,7 @@ HELP_TEXT = (
     "/start — приветствие\n"
     "/help — эта справка\n"
     "/reload — обновить базу знаний\n"
+    "/upload — режим загрузки видео (5 мин)\n"
 )
 
 
@@ -123,6 +135,29 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(HELP_TEXT)
+
+
+async def cmd_upload(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    uid = update.effective_user.id
+    upload_mode[uid] = time.time() + UPLOAD_TIMEOUT
+    await update.message.reply_text(
+        "Режим загрузки включён на 5 минут.\n"
+        "Отправьте видео — я верну file_id для таблицы."
+    )
+
+
+async def handle_video(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    uid = update.effective_user.id
+    expiry = upload_mode.get(uid, 0)
+    if time.time() > expiry:
+        return
+    video = update.message.video or update.message.document
+    if not video:
+        return
+    await update.message.reply_text(
+        f"file_id для таблицы:\n\n<code>{video.file_id}</code>",
+        parse_mode="HTML",
+    )
 
 
 async def cmd_reload(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -145,8 +180,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     obj_code = detect_object_code(query, object_synonyms)
     scored = find_best_with_object(query, rows, TOP_N, obj_code)
-    answer = format_result(scored)
+    answer, video_ids = format_result(scored)
     await update.message.reply_text(answer)
+    for vid in video_ids:
+        try:
+            await update.message.reply_video(vid)
+        except Exception:
+            logger.warning("Не удалось отправить видео: %s", vid)
 
 
 # ─── Main ────────────────────────────────────────────────────────────────────
@@ -166,6 +206,8 @@ def main() -> None:
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(CommandHandler("help", cmd_help))
     app.add_handler(CommandHandler("reload", cmd_reload))
+    app.add_handler(CommandHandler("upload", cmd_upload))
+    app.add_handler(MessageHandler(filters.VIDEO | filters.Document.VIDEO, handle_video))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
     app.run_polling(drop_pending_updates=True)
