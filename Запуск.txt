@@ -1,2 +1,5 @@
 source .venv/bin/activate
 python search_solution.py
+
+source .venv/bin/activate
+python bot.py
