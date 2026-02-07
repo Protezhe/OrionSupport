@@ -78,8 +78,8 @@ def format_result(scored: list) -> tuple[str, list[str], list[str]]:
     good = [(score, row) for score, row in scored if score >= MIN_SCORE]
     if not good:
         return (
-            "К сожалению, я не нашёл подходящего решения.\n"
-            "Попробуйте переформулировать вопрос или обратитесь к дежурному инженеру.",
+            "Эхх, решение не нашлось, пусечка…\n"
+            "Попробуй переформулировать запрос или напиши дежурному инженеру, ладненько?",
             [],
             [],
         )
@@ -112,8 +112,8 @@ def format_result(scored: list) -> tuple[str, list[str], list[str]]:
 # ─── Handlers ────────────────────────────────────────────────────────────────
 
 HELP_TEXT = (
-    "Я — бот техподдержки Орион.\n\n"
-    "Просто напишите описание проблемы, и я постараюсь найти решение.\n\n"
+    "Я — бот техподдержки Орион, твоя аниме‑помощница.\n\n"
+    "Опиши проблему, и я постараюсь найти решение, сенпай.\n\n"
     "Примеры:\n"
     "• «розовый цвет проектора»\n"
     "• «нет звука в зале кп»\n"
@@ -122,15 +122,14 @@ HELP_TEXT = (
     "/start — приветствие\n"
     "/help — эта справка\n"
     "/reload — обновить базу знаний\n"
-    "/upload — режим загрузки видео/фото (5 мин)\n"
 )
 
 
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(
-        "Привет! Я бот техподдержки Орион 🛠\n\n"
-        "Опишите проблему — я поищу решение в базе знаний.\n"
-        "Для справки: /help"
+        "Привет-привет! Я аниме‑тянка из техподдержки Орион.\n\n"
+        "Опиши проблему — я поищу решение в базе знаний, ага.\n"
+        "Если нужна справка: /help"
     )
 
 
@@ -143,7 +142,7 @@ async def cmd_upload(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     upload_mode[uid] = time.time() + UPLOAD_TIMEOUT
     await update.message.reply_text(
         "Режим загрузки включён на 5 минут.\n"
-        "Отправьте видео или фото — я верну file_id для таблицы."
+        "Отправь видео или фото — я верну file_id для таблицы."
     )
 
 
@@ -169,6 +168,16 @@ async def handle_upload(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
     # Upload mode выключен — обработать подпись как обычный запрос
     caption = (update.message.caption or "").strip()
+    if not caption:
+        return
+
+    # В групповых чатах обрабатываем подпись только если бота тэгнули
+    if update.effective_chat.type in ("group", "supergroup"):
+        bot_username = context.bot.username
+        if f"@{bot_username}" not in caption:
+            return
+        caption = caption.replace(f"@{bot_username}", "").strip()
+
     if caption:
         await _search_and_reply(update, caption)
 
@@ -176,7 +185,7 @@ async def handle_upload(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 async def _search_and_reply(update: Update, query: str) -> None:
     if not rows:
         await update.message.reply_text(
-            "База знаний пуста. Попробуйте /reload или обратитесь к инженеру."
+            "База знаний пуста. Попробуй /reload или напиши инженеру."
         )
         return
     logger.info("Запрос от %s: %s", update.effective_user.first_name, query)
@@ -202,7 +211,19 @@ async def cmd_reload(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    query = (update.message.text or "").strip()
+    text = (update.message.text or "").strip()
+    if not text:
+        return
+
+    # В групповых чатах отвечаем только если бота тэгнули
+    if update.effective_chat.type in ("group", "supergroup"):
+        bot_username = context.bot.username
+        if f"@{bot_username}" not in text:
+            return
+        query = text.replace(f"@{bot_username}", "").strip()
+    else:
+        query = text
+
     if query:
         await _search_and_reply(update, query)
 
