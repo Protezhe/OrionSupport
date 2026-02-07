@@ -90,18 +90,18 @@ def format_result(scored: list) -> tuple[str, list[str], list[str]]:
     solution2 = _get_field_case_insensitive(row, "Решение_2")
     obj = _get_field_case_insensitive(row, "Объект")
 
-    header = "▸ Найдено"
+    header = "▸ Нашла!"
     if obj:
         header += f"  [{obj.upper()}]"
     header += f"  (совпадение {score:.0%})"
 
     block = [header]
     if problem:
-        block.append(f"Проблема: {problem}")
+        block.append(f"Проблемка: {problem}")
     if solution:
-        block.append(f"✅ Решение: {solution}")
+        block.append(f"Давай попробуем: {solution}")
     if solution2.strip():
-        block.append(f"✅ Решение 2: {solution2}")
+        block.append(f"Решение 2: {solution2}")
 
     video_ids = _parse_file_ids(_get_field_case_insensitive(row, "Видео"))
     photo_ids = _parse_file_ids(_get_field_case_insensitive(row, "Фото"))
