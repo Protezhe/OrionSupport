@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Контрольные листы</title>
+<style>
+:root {
+  --paper: #f7f2e9;
+  --ink: #1f1a14;
+  --muted: #6d6155;
+  --accent: #b45d3a;
+  --border: #2b241d;
+  --line: #c9b9a9;
+  --check: #1f1a14;
+  --panel: #fff9f2;
+  --error: #8b1f12;
+}
+* { box-sizing: border-box; }
+body {
+  font-family: "PT Serif", "Georgia", serif;
+  color: var(--ink);
+  margin: 26px 34px;
+  font-size: 13px;
+  background:
+    radial-gradient(circle at 12px 12px, rgba(180, 93, 58, 0.08) 1px, transparent 1.5px) 0 0 / 12px 12px,
+    linear-gradient(0deg, rgba(0,0,0,0.02), rgba(0,0,0,0.02)),
+    var(--paper);
+}
+.toolbar {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 16px;
+  border: 2px solid var(--border);
+  padding: 12px;
+  margin-bottom: 12px;
+  background: var(--panel);
+}
+.toolbar label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 4px; }
+.toolbar select, .toolbar input, .toolbar textarea {
+  width: 100%;
+  border: 1px solid var(--line);
+  padding: 6px 8px;
+  font-family: "PT Serif", "Georgia", serif;
+  font-size: 13px;
+  background: #fff;
+}
+.toolbar .wide { grid-column: 1 / -1; }
+.toolbar .actions {
+  display: flex;
+  align-items: end;
+  gap: 8px;
+}
+.toolbar button {
+  border: 2px solid var(--border);
+  background: var(--paper);
+  padding: 6px 10px;
+  cursor: pointer;
+  font-size: 12px;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+.toolbar button.primary {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.status {
+  font-size: 12px;
+  color: var(--muted);
+}
+.status.error {
+  color: var(--error);
+}
+.header {
+  border: 2px solid var(--border);
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  background: linear-gradient(0deg, rgba(180, 93, 58, 0.08), rgba(180, 93, 58, 0.04));
+}
+.month { text-align: right; color: var(--muted); font-size: 12px; letter-spacing: 0.2px; }
+.title {
+  font-weight: 700;
+  text-align: center;
+  margin: 6px 0 4px;
+  font-size: 16px;
+}
+.subtitle {
+  text-align: center;
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: 0.4px;
+}
+.section {
+  border: 1px solid var(--line);
+  padding: 10px 12px;
+  margin: 10px 0;
+  background: rgba(255,255,255,0.6);
+}
+.block { margin: 6px 0; }
+.signature { margin: 6px 0; }
+.signature-line { display: inline-block; border-bottom: 1px solid var(--border); min-width: 260px; height: 14px; vertical-align: middle; }
+.notes { margin: 8px 0 12px; }
+.notes p { margin: 4px 0; }
+.checklist { width: 100%; border-collapse: collapse; margin: 8px 0 12px; }
+.checklist th {
+  text-align: left;
+  border-bottom: 2px solid var(--border);
+  padding: 6px 8px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+.checklist td {
+  border-bottom: 1px solid var(--line);
+  padding: 6px 8px;
+  vertical-align: top;
+}
+.check-col { width: 44px; text-align: center; color: var(--check); }
+.check-col input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  pointer-events: none;
+}
+.check-col .print-check { display: none; }
+.footer { margin-top: 8px; }
+.footer p { margin: 4px 0; }
+.defects { margin-top: 10px; }
+.defects-line { border-bottom: 1px solid var(--border); min-height: 16px; margin-top: 6px; }
+.stamp {
+  display: inline-block;
+  border: 2px solid var(--accent);
+  color: var(--accent);
+  padding: 2px 8px;
+  font-size: 11px;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+}
+@media print {
+  .check-col input[type="checkbox"] { display: none; }
+  .check-col .print-check { display: inline-block; font-size: 16px; }
+  .check-col input[type="checkbox"]:checked + .print-check::after { content: "☑"; }
+  .check-col input[type="checkbox"]:not(:checked) + .print-check::after { content: "☐"; }
+  .toolbar { display: none; }
+  body { margin: 8mm; font-size: 11px; overflow-wrap: break-word; word-wrap: break-word; }
+  .header { padding: 8px 10px; }
+  .section { padding: 8px 10px; margin: 8px 0; overflow-wrap: break-word; word-wrap: break-word; }
+  .checklist { table-layout: fixed; }
+  .checklist th { padding: 5px 6px; font-size: 10px; word-wrap: break-word; overflow-wrap: break-word; }
+  .checklist td { padding: 5px 6px; word-wrap: break-word; overflow-wrap: break-word; }
+  .signature-line { min-width: 220px; }
+}
+</style>
+</head>
+<body>
+<div class="toolbar" id="toolbar">
+  <div>
+    <label for="date">Дата</label>
+    <select id="date"></select>
+  </div>
+  <div class="actions wide">
+    <button id="print" class="primary" type="button">Печать</button>
+    <button id="refresh" type="button">Обновить таблицу</button>
+  </div>
+  <div class="status wide" id="status"></div>
+</div>
+
+<div class="header">
+  <div class="month" id="month"></div>
+  <div class="title" id="title"></div>
+  <div class="subtitle">Ежемесячное техническое обслуживание (ТО-1)</div>
+</div>
+
+<div class="section">
+  <div id="engineer-line">Лица, принимающие участие в техническом обслуживании (ФИО, профессия/должность) - </div>
+  <div class="signature"><span class="signature-line"></span> Образец подписи</div>
+</div>
+
+<div class="section notes" id="warnings"></div>
+
+<table class="checklist">
+  <thead>
+    <tr>
+      <th class="check-col">Галочка</th>
+      <th>Наименование прибора</th>
+      <th>Наименование операции по техническому обслуживанию</th>
+    </tr>
+  </thead>
+  <tbody id="rows"></tbody>
+</table>
+
+<div class="section footer" id="closing"></div>
+
+<div class="defects section">
+  <div><span class="stamp">Выявленные недостатки</span></div>
+  <div id="defects-lines"></div>
+</div>
+
+<script>
+let SCHEDULE = [];
+
+function monthYearRu(value) {
+  const months = ["январь","февраль","март","апрель","май","июнь","июль","август","сентябрь","октябрь","ноябрь","декабрь"];
+  const dt = value ? new Date(value) : new Date();
+  return `${months[dt.getMonth()]} ${dt.getFullYear()} г.`;
+}
+
+function escapeHtml(s) {
+  return String(s)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
+}
+
+function setStatus(text, isError) {
+  const el = document.getElementById("status");
+  if (!el) return;
+  el.textContent = text || "";
+  el.classList.toggle("error", Boolean(isError));
+}
+
+async function loadSchedule() {
+  setStatus("Загрузка данных из таблицы...");
+  const res = await fetch("/api/schedule", { cache: "no-store" });
+  if (!res.ok) {
+    throw new Error(`Ошибка загрузки: ${res.status}`);
+  }
+  const payload = await res.json();
+  SCHEDULE = payload.entries || [];
+  setStatus("");
+}
+
+function renderDefects(text) {
+  const container = document.getElementById("defects-lines");
+  container.innerHTML = "";
+  const lines = (text || "").split("\n").map(l => l.trim()).filter(Boolean);
+  if (lines.length === 0) {
+    for (let i = 0; i < 3; i++) {
+      const div = document.createElement("div");
+      div.className = "defects-line";
+      container.appendChild(div);
+    }
+    return;
+  }
+  lines.forEach(line => {
+    const div = document.createElement("div");
+    div.className = "defects-line";
+    div.textContent = line;
+    container.appendChild(div);
+  });
+}
+
+async function loadChecklist(dateValue) {
+  if (!dateValue) return;
+  setStatus("Загрузка чеклиста...");
+  const res = await fetch(`/api/checklist?date=${encodeURIComponent(dateValue)}`, { cache: "no-store" });
+  if (!res.ok) {
+    setStatus("Не удалось загрузить чеклист.", true);
+    return;
+  }
+  const payload = await res.json();
+  const sheet = payload.sheet || {};
+  document.getElementById("month").textContent = monthYearRu(payload.date);
+  document.getElementById("title").textContent = sheet.title || sheet.id || "";
+  document.getElementById("warnings").innerHTML = (sheet.warnings || []).map(l => `<p>${escapeHtml(l)}</p>`).join("");
+  document.getElementById("closing").innerHTML = (sheet.closing || []).map(l => `<p>${escapeHtml(l)}</p>`).join("");
+  const rows = payload.items || [];
+  document.getElementById("rows").innerHTML = rows.map(r => (
+    `<tr>
+      <td class="check-col"><input type="checkbox" checked disabled><span class="print-check"></span></td>
+      <td>${escapeHtml(r.device)}</td>
+      <td>${escapeHtml(r.operation)}</td>
+    </tr>`
+  )).join("");
+  const engineerLine = document.getElementById("engineer-line");
+  engineerLine.textContent = `Лица, принимающие участие в техническом обслуживании (ФИО, профессия/должность) - ${payload.engineer || ""}`;
+  renderDefects(payload.defects || "");
+  setStatus("");
+}
+
+async function init() {
+  try {
+    await loadSchedule();
+  } catch (err) {
+    setStatus("Не удалось загрузить данные. Проверьте доступ к таблице.", true);
+    console.error(err);
+  }
+
+  const dateSelect = document.getElementById("date");
+  function renderDates() {
+    dateSelect.innerHTML = "";
+    SCHEDULE.forEach(entry => {
+      const opt = document.createElement("option");
+      opt.value = entry.date;
+      const label = entry.checklist ? `${entry.display_date} — ${entry.checklist}` : entry.display_date;
+      opt.textContent = label;
+      dateSelect.appendChild(opt);
+    });
+  }
+  renderDates();
+  dateSelect.addEventListener("change", () => loadChecklist(dateSelect.value));
+
+  document.getElementById("print").addEventListener("click", () => window.print());
+  document.getElementById("refresh").addEventListener("click", async () => {
+    setStatus("Обновляю таблицу...");
+    try {
+      const res = await fetch("/api/refresh", { method: "POST", cache: "no-store" });
+      if (!res.ok) throw new Error(`Ошибка обновления: ${res.status}`);
+      const payload = await res.json();
+      SCHEDULE = payload.entries || [];
+      renderDates();
+      dateSelect.value = SCHEDULE[0]?.date || "";
+      await loadChecklist(dateSelect.value);
+      setStatus("Таблица обновлена.");
+      setTimeout(() => setStatus(""), 1500);
+    } catch (err) {
+      setStatus("Не удалось обновить таблицу.", true);
+      console.error(err);
+    }
+  });
+
+  dateSelect.value = SCHEDULE[0]?.date || "";
+  await loadChecklist(dateSelect.value);
+}
+
+init();
+</script>
+</body>
+</html>

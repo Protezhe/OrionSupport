@@ -5,3 +5,4 @@ __pycache__/
 .idea/
 config.json
 ТехПроблемы Орион.csv
+.DS_Store

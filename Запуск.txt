@@ -3,6 +3,7 @@ python search_solution.py
 
 source .venv/bin/activate
 python bot.py
+python checklists/app.py
 
 nohup bash start.sh > bot.log 2>&1 &
 
