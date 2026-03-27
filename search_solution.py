@@ -22,7 +22,7 @@ from pathlib import Path
 
 DEFAULT_SHEET_CSV_URL = (
     "https://docs.google.com/spreadsheets/d/"
-    "13Kdj9pCMfha3UwzYi_pWsLt6V5yayrzpTsqqOvM0Tzg/export?format=csv"
+    "13Kdj9pCMfha3UwzYi_pWsLt6V5yayrzpTsqqOvM0Tzg/export?format=csv&sheet=support"
 )
 LOCAL_CSV = Path(__file__).parent / "ТехПроблемы Орион.csv"
 CONFIG_PATH = Path(__file__).parent / "config.json"
