@@ -228,6 +228,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await _search_and_reply(update, query)
 
 
+async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Логируем ошибку и продолжаем работу."""
+    logger.error("Ошибка при обработке запроса: %s", context.error)
+
+
 # ─── Main ────────────────────────────────────────────────────────────────────
 
 
@@ -240,7 +245,14 @@ def main() -> None:
 
     logger.info("Загружено %d записей. Запускаю бота…", len(rows))
 
-    app = ApplicationBuilder().token(BOT_TOKEN).build()
+    app = (
+        ApplicationBuilder()
+        .token(BOT_TOKEN)
+        .connect_timeout(30)
+        .read_timeout(30)
+        .write_timeout(30)
+        .build()
+    )
 
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(CommandHandler("help", cmd_help))
@@ -248,8 +260,14 @@ def main() -> None:
     app.add_handler(CommandHandler("upload", cmd_upload))
     app.add_handler(MessageHandler(filters.VIDEO | filters.Document.VIDEO | filters.PHOTO, handle_upload))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    app.add_error_handler(error_handler)
 
-    app.run_polling(drop_pending_updates=True)
+    app.run_polling(
+        drop_pending_updates=True,
+        read_timeout=30,
+        connect_timeout=30,
+        pool_timeout=30,
+    )
 
 
 if __name__ == "__main__":
